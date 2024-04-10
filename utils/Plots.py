@@ -407,5 +407,71 @@ def plot_distributions_and_roc(filtered_df, rbp, optimal_threshold, fpr, tpr, op
     plt.close()
 
 
+def plot_boxplot_with_annotations(df, significant_samples, rbp_interest, experiment, data_type, path_save):
+    """
+    Plot boxplots with annotations.
+
+    Parameters:
+    - df (pandas.DataFrame): DataFrame containing the data to plot.
+    - significant_samples (list): List of significant samples.
+    - rbp_interest (str): The RNA-binding protein of interest.
+    - experiment (str): The name of the experiment.
+    - data_type (str): The type of data being plotted (e.g., 'Transcripts', 'Genes').
+    - path_save (str): The path where the plot will be saved.
+
+    Returns:
+    None
+    """
+    fig, ax = plt.subplots(figsize=(11, 10), dpi=300)
+    # Identify the differential expressed transcripts
+    scores_methods = {rbp_interest: df.loc[:, rbp_interest].abs()}
+    df_scores = pd.DataFrame(scores_methods)
+    df_scores['DE_Limma'] = 'No'
+    df_scores.loc[significant_samples, 'DE_Limma'] = 'Yes'
+    df_melted = pd.melt(df_scores, id_vars='DE_Limma', var_name=experiment, value_name='Score')
+    # Make a copy of the original DataFrame
+    df_original = df_melted.copy()
+    df_melted["Score"] = df_melted["Score"]+1
+    df_melted["Score"] = np.log10(df_melted["Score"])
+    # Calculate and display the median of each group
+    median_group_yes = df_original[df_original['DE_Limma'] == 'Yes']['Score'].median()
+    median_group_no = df_original[df_original['DE_Limma'] == 'No']['Score'].median()
+    median_group_yes = round(median_group_yes, 4)
+    median_group_no = round(median_group_no, 4)
+    palette = {'Yes': '#536270', 'No': '#CBAC88'}
+    plot_params = {
+        'x': experiment,
+        'y': 'Score',
+        'hue': 'DE_Limma',
+        'palette': palette,
+        'hue_order': ['Yes', 'No'] 
+    }
+    annotator_parameters = {
+        'test': 'Mann-Whitney', 
+        'comparisons_correction': 'Bonferroni',
+        'text_format': 'star'
+    }
+    sns.stripplot(ax=ax, data=df_melted, **plot_params, jitter=True, dodge=True)
+    sns.boxplot(ax=ax, data=df_melted, **plot_params)
+    ax.set_title(experiment, fontsize=15)
+    #ax.set_ylabel(f'{data_type} Scores in log$_{{10}}$-scale', fontsize=16)
+    ax.set_xticklabels([]) 
+    ax.set_ylabel(f'Scores in log$_{{10}}$-scale', fontsize=15)
+    ax.set_xlabel(rbp_interest, fontsize=15)
+    #ax.set_xticklabels(ax.get_xticklabels(), rotation=0, ha='right', fontsize=12)  # Ajusta el tamaño de la fuente de los ticks
+    #ax.tick_params(axis='both', which='major', labelsize=12)  # Ajusta el tamaño de la fuente de los números
+    ax.grid(False)
+    unique_methods = df_melted[experiment].unique()
+    pairs = [[(method, 'No'), (method, 'Yes')] for method in unique_methods]
+    annotator = Annotator(ax=ax, pairs=pairs, data=df_original, **plot_params)
+    annotator.configure(**annotator_parameters)
+    _, corrected_results = annotator.apply_and_annotate()
+    handles, labels = ax.get_legend_handles_labels()
+    custom_labels = ['DE', 'non-DE']
+    ax.legend(handles, custom_labels, title=data_type, fontsize=11, loc='upper right', bbox_to_anchor=(1, 1))
+    plt.tight_layout()
+    sns.despine() 
+    plt.savefig(f'{path_save}/boxplot_methods_scores_{experiment}_{data_type}_{rbp_interest}_y{median_group_yes}_n{median_group_no}.png', transparent=False)
+    plt.close()
 
 

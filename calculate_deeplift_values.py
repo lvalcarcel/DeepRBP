@@ -8,7 +8,8 @@ from captum.attr import DeepLift, LayerDeepLift
 from collections import namedtuple
 import os
 import sys
-
+from tqdm import tqdm
+import warnings
 
 ruta_utils = '/scratch/jsanchoz/ML4BM-Lab/DeepRBP/utils'
 os.environ['PYTHONPATH'] = ruta_utils + ':' + os.environ.get('PYTHONPATH', '')
@@ -36,7 +37,7 @@ def calculate_batch_scores_deeplift(out_node, explainer, rbps_test, base_rbps_te
                     additional_forward_args = gn_test)
     return scores
 
-def calculate_rbp_reference(df_scaled_test, select_reference='median'):  
+def calculate_rbp_reference(df_scaled_test, select_reference):  
     """
     Calculate the reference for RBP (RNA-binding protein) expression data.
     
@@ -83,12 +84,16 @@ def calculate_deeplift_model_output_scores(model, test_labels, rbps_test, base_r
     explainer = DeepLift(model)
     n_out_features = test_labels.shape[1]
    
+    # Suppress specific user warnings
+    warnings.filterwarnings("ignore", message="Input Tensor .* did not already require gradients")
+    warnings.filterwarnings("ignore", message="Setting forward, backward hooks and attributes on non-linear activations")
+
     # Step 2: Calculate scores batch-wise RBP x S x T
     list_scores_batch = []
-    for node in range(n_out_features):
-        print(f'[create_deeplift_scores_dataframe] Output node number {node}')
+    for node in tqdm(range(n_out_features), desc='Calculating scores', unit='node'):
         scores_batch = calculate_batch_scores_deeplift(node, explainer, rbps_test, base_rbps_test, gn_test)
         list_scores_batch.append(scores_batch)
+
     print('[create_deeplift_scores_dataframe] Calculate deeplift scores for all nodes ... -> DONE')
     return list_scores_batch
 
@@ -110,8 +115,7 @@ def reduce_batch_dimension(list_batch, name_trans, name_rbps, method):
     
     if method == 'tstat':
         df_deeplift_TxRBP = pd.DataFrame(0, index=name_trans, columns=name_rbps)
-        for i, tensor in enumerate(list_batch):
-            print(f'[] rbp index {i}/{len(name_trans)} calculating')
+        for i, tensor in enumerate(tqdm(list_batch, desc='Calculating t-stat', unit='rbp index')):
             mean = np.mean(tensor.detach().numpy(), axis=0)
             std = np.std(tensor.detach().numpy(), axis=0)
             num_samples = tensor.size()[0] 
@@ -171,7 +175,7 @@ def perform_deeplift_pipeline(df_scaled_test, test_labels, test_gn, model, path_
     trans_id = list(test_labels.columns)
 
     ### Calculate the reference of the RBP expression data
-    base_rbps_test = calculate_rbp_reference(df_scaled_test, select_reference='median')
+    base_rbps_test = calculate_rbp_reference(df_scaled_test, select_reference)
     print('[perform_deeplift_pipeline] Calculate the reference of the RBP expression data ... -> DONE')
     print('[perform_deeplift_pipeline] reference of the RBP expression:', base_rbps_test)
     print('[perform_deeplift_pipeline] Calculate shapley scores with DeepLIFT')
@@ -186,13 +190,18 @@ def perform_deeplift_pipeline(df_scaled_test, test_labels, test_gn, model, path_
     df_deeplift_scores_TxRBP.loc[test_gn.mean() < 1, :] = 0 
     print('[perform_deeplift_pipeline] Set low-expressed genes (mean < 1TPM) to 1 of the TxRBP to 0 ... -> DONE')
     # Save TxRBP scores
+    utils.check_create_new_directory(path_save)
     df_deeplift_scores_TxRBP.to_csv(f'{path_save}/df_DeepLIFT_{select_reference}_{method}_TxRBPs.csv')
-    print(f'[create_deeplift_scores_dataframe] Saved df_DeepLIFT_TxRBPs.csv in {path_save}')
+    print(f'[perform_deeplift_pipeline] Saved df_DeepLIFT_TxRBPs.csv in {path_save}')
 
     # 3) Collapse scores to genes (RBP x G)
     df_deeplift_scores_GxRBP = collapse_transcript_scores_to_genes(df_deeplift_scores_TxRBP, getBM)
     print('[get_deeplift_scores_genes] Group values by gene - take the max absolute value of the transcripts per gene ... -> DONE')
-    return df_deeplift_scores_GxRBP
+
+    # Save GxRBP scores
+    df_deeplift_scores_GxRBP.to_csv(f'{path_save}/df_DeepLIFT_{select_reference}_{method}_GxRBPs.csv')
+    print(f'[perform_deeplift_pipeline] Saved df_DeepLIFT_GxRBPs.csv in {path_save}')
+    return df_deeplift_scores_TxRBP, df_deeplift_scores_GxRBP
 
 def match_scores_and_validation_data(df_val_GxRBP, df_score_GxRBP, score_method, path_save=None): 
     """
@@ -270,8 +279,8 @@ def main(df_scaled_test, test_labels, test_gn, model, path_save, df_val_GxRBP, p
 
         else:
             print('[get_deeplift_scores_genes] WARNING: Calculating GxRBP scores ...')
-            df_tstat_scores_GxRBP = perform_deeplift_pipeline(df_scaled_test, test_labels, test_gn, model, path, getBM, select_reference=study, method = 'tstat')
-            df_sum_scores_GxRBP = perform_deeplift_pipeline(df_scaled_test, test_labels, test_gn, model, path, getBM, select_reference=study, method = 'sum_scores')
+            _, df_tstat_scores_GxRBP = perform_deeplift_pipeline(df_scaled_test, test_labels, test_gn, model, path, getBM, select_reference=study, method = 'tstat')
+            _, df_sum_scores_GxRBP = perform_deeplift_pipeline(df_scaled_test, test_labels, test_gn, model, path, getBM, select_reference=study, method = 'sum_scores')
             print('[calculate_deeplift][main] Obtain df_score_GxRBP from Deeplift scores ... -> DONE')
         print('[main] 1) Obtain GxRBP score matrix ... -> DONE')
 

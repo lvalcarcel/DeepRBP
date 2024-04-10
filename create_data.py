@@ -20,7 +20,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate Datasets')
     parser.add_argument('--chunksize', type=int, help='Number of samples to process per chunk', required=True)
     parser.add_argument('--select_genes', type=str, help='Genes selected for modelling', default=None)
-    parser.add_argument('--path_data', type=str, default='/scratch/jsanchoz/data', help='Path for the data directory')
+    parser.add_argument('--path_data', type=str, default='/scratch/jsanchoz/ML4BM-Lab/DeepRBP/data', help='Path for the data directory')
     args = parser.parse_args()
     
     print(f'path_data is: {path_data}')

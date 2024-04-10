@@ -1065,3 +1065,38 @@ def evaluate_model(model, df_rbps_control, df_gns_control, df_labels_control, df
     print(f"[utils] Results in all {condition1} data -> spear cor: {round(spear_control, 3)}, pear_cor: {round(pear_control, 3)} & mse: {round(mse_control, 3)}")
     print(f"[utils] Results in all {condition2} data -> spear cor: {round(spear_kd, 3)}, pear_cor: {round(pear_kd, 3)} & mse: {round(mse_kd, 3)}")
     
+def get_significant_samples(rbp_interest, experiment, path_data, df_deeplift_scores_TxRBP):
+    """
+    Retrieves significant samples in transcripts and genes from a Limma result file
+    if it exists.
+
+    Parameters:
+    - rbp_interest (str): The RNA-binding protein of interest.
+    - experiment (str): The name of the experiment.
+    - path_data (str): The path to the data directory.
+    - df_deeplift_scores_TxRBP (DataFrame): DataFrame containing DeepLIFT scores for transcripts.
+
+    Returns:
+    - significant_samples (list): List of significant samples in transcripts.
+    - significant_samples_gns (list): List of significant samples in genes.
+
+    Raises:
+    - FileNotFoundError: If the specified Limma result file does not exist.
+    """
+    file_path = f"{path_data}/limma/limma_{experiment}_{rbp_interest}_results.csv"
+    if os.path.isfile(file_path):
+        print("There is a Limma result dataframe saved in your directory")
+        print(file_path)
+        df_limma = pd.read_csv(file_path, index_col=0)
+        df_limma.set_index('Transcript_ID', inplace=True)
+        df_significant = df_limma.loc[df_deeplift_scores_TxRBP.index].copy()
+        df_significant = df_significant[df_significant['adj.P.Val'] < 0.05]
+        df_significant['Transcript_ID'] = df_significant.index
+        df_significant.reset_index(inplace=True, drop=True)
+        significant_samples = df_significant.Transcript_ID.tolist()
+        significant_samples_gns = df_significant.Gene_ID.unique().tolist()
+        return significant_samples, significant_samples_gns
+    else:
+        # If the file does not exist, print a message indicating it was not found and raise an exception
+        print("There is NOT a Limma result dataframe saved in your directory")
+        raise FileNotFoundError("The specified file does not exist")
