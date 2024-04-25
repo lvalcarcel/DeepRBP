@@ -5,7 +5,7 @@
 <!-- ABOUT THE PROJECT -->
 ## Description
 <p align="center">
-    <img src="images/methods_deepsf.pdf" width="700" alt="PDF Image">
+    <img src="images/methods_deepsf.png" width="700" alt="PDF Image">
 </p>
 
  <!-- <p align="center"><a href=https://www.thelancet.com/journals/ebiom/article/PIIS2352-3964(23)00333-X/fulltext>Discovering the mechanism of action of drugs with a sparse explainable network<a></p> -->
