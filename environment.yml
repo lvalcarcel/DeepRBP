@@ -1,6 +1,7 @@
 name: DeepRBP
 channels:
   - pytorch
+  - conda-forge
   - defaults
 dependencies:
   - anyio=4.2.0
